@@ -8,11 +8,23 @@
 #include "KSemaphore.h"
 #include "KThread.h"
 
+//Makes it easier for ASM
+extern "C"
+{
+	void* SchedulerGetCurrentContext();
+	void SchedulerSaveUserStack(void* userStack);
+	void* SchedulerGetUserStack();
+}
+
 class Debugger;
 class Scheduler
 {
 	friend Debugger;
 public:
+	static void* GetCurrentContext();
+	static void SaveUserStack(void* userStack);
+	static void* GetUserStack();
+	
 	Scheduler(KThread& bootThread);
 
 	void Schedule();

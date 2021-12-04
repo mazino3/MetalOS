@@ -21,6 +21,7 @@ extern "C"
 	void ArchSetInterruptStack(void* stack);
 	void ArchSetKernelCpuContext(void* context);
 	void ArchSetUserCpuContext(void* context);
+	void* ArchContextGetStack(void* context);
 
 	void ArchPause();
 	void ArchWait();

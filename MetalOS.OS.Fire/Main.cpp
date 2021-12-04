@@ -6,17 +6,12 @@
 
 int main(int argc, char** argv)
 {
-	Handle h = CreateWindow("Fire");
-
-	Rectangle rect = { 0 };
-	GetWindowRect(h, rect);
-	DebugPrintf("Rect: (0x%x,0x%x) x (0x%x,0x%x)\n",
-		rect.P1.X, rect.P1.Y, rect.P2.X, rect.P2.Y);
-
-	const size_t width = rect.P2.X - rect.P1.X;
-	const size_t height = rect.P2.Y - rect.P1.Y;
+	Handle desktop;
+	Point2D bounds;
+	CreateDesktop(desktop, bounds);
+	DebugPrintf("Bounds: (0x%x,0x%x)\n", bounds.X, bounds.Y);
 	
-	FireScreen screen(height, width);
+	FireScreen screen(bounds.Y, bounds.X);
 	screen.Initialize();
 	screen.Draw();
 	SetScreenBuffer(screen.GetBuffer());

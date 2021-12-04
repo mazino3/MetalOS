@@ -79,7 +79,8 @@ public:
 	void* VirtualMap(const void* address, const std::vector<paddr_t>& addresses, const MemoryProtection& protect);
 
 	//User process address space
-	void* VirtualAlloc(UserProcess& process, void* address, size_t size, MemoryAllocationType allocationType, MemoryProtection protect);
+	void* VirtualAlloc(UserProcess& process, const void* address, const size_t size, const MemoryAllocationType allocationType, const MemoryProtection protection);
+	void* VirtualMap(UserProcess& process, const void* address, const std::vector<paddr_t>& addresses, const MemoryProtection& protection);
 #pragma endregion
 
 #pragma region ACPI
@@ -128,7 +129,7 @@ public:
 
 #pragma region ThreadStarts
 	__declspec(noreturn) static void KernelThreadInitThunk();
-	__declspec(noreturn) static void UserThreadInitThunk();
+	__declspec(noreturn) static uint32_t UserThreadInitThunk(void* unused);
 #pragma endregion
 
 #pragma region Kernel Debugger
@@ -137,7 +138,7 @@ public:
 #pragma endregion
 
 #pragma region Kernel Interface
-	KThread* CreateKernelThread(const ThreadStart start, void* arg);
+	KThread* CreateKernelThread(const ThreadStart start, void* arg, UserThread* userThread = nullptr);
 	void KernelThreadSleep(const nano_t value) const;
 	void ExitKernelThread();
 
@@ -177,9 +178,12 @@ public:
 #pragma region System Calls
 	SystemCallResult GetSystemInfo(SystemInfo* info);
 	size_t GetTickCount();
+	SystemCallResult GetSystemTime(SystemTime* time);
 
-	Handle GetCurrentThread();
-	Handle CreateThread(size_t stackSize, ThreadStart startAddress, void* arg);
+	HThread GetCurrentThread();
+	SystemCallResult CreateProcess(const char* processName);
+	HThread CreateThread(size_t stackSize, ThreadStart startAddress, void* arg);
+	uint32_t GetThreadId(const Handle handle);
 	void Sleep(const uint32_t milliseconds);
 	void SwitchToThread();
 	SystemCallResult SuspendThread(Handle thread, size_t* prevCount);
@@ -187,11 +191,11 @@ public:
 	SystemCallResult ExitProcess(const uint32_t exitCode);
 	SystemCallResult ExitThread(const uint32_t exitCode);
 
-	SystemCallResult CreateWindow(const char* name);
-	SystemCallResult GetWindowRect(const Handle handle, Rectangle* rect);
+	SystemCallResult CreateDesktop(Handle* handle, Point2D* bounds);
+	HThread GetDesktop();
+	SystemCallResult SetScreenBuffer(void* buffer);
 	SystemCallResult GetMessage(Message* message);
 	SystemCallResult PeekMessage(Message* message);
-	SystemCallResult SetScreenBuffer(void* buffer);
 
 	Handle CreateFile(const char* name, const GenericAccess access);
 	SystemCallResult ReadFile(const Handle handle, void* buffer, const size_t bufferSize, size_t* bytesRead);
@@ -203,11 +207,15 @@ public:
 	SystemCallResult CreateDirectory(const char* path);
 
 	void* VirtualAlloc(const void* address, const size_t size, const MemoryAllocationType allocationType, const MemoryProtection protect);
+	HRingBuffer CreateRingBuffer(const char* name, const size_t indexSize, const size_t ringSize);
+	HSharedMemory CreateSharedMemory(const char* name, const size_t size);
+	void* MapObject(const void* address, Handle handle);
+	void* MapSharedObject(const void* address, const char* name);
 
 	SystemCallResult DebugPrint(char* s);
 #pragma endregion
 
-	UserWindow* Window;
+	UserThread* WindowThread;
 
 private:
 	static uint32_t IdleThread(void* arg)
@@ -265,7 +273,8 @@ private:
 	//Process and Thread management
 	std::map<uint32_t, UserProcess*>* m_processes;
 	Scheduler* m_scheduler;
-	
+	std::map<std::string, UserRingBuffer*> *m_objectsRingBuffers;
+
 	//Libraries
 	std::list<KeLibrary>* m_modules;
 

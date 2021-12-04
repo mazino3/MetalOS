@@ -64,6 +64,7 @@ struct SystemCallFrame
 	uint64_t Arg1;
 	uint64_t Arg2;
 	uint64_t Arg3;
+	uint64_t RSP;
 };
 #pragma pack(pop)
 

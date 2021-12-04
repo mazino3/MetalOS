@@ -4,6 +4,43 @@
 #include "Scheduler.h"
 #include "KSemaphore.h"
 #include <MetalOS.Arch.h>
+#include "StackWalk.h"
+#include "PortableExecutable.h"
+
+void* SchedulerGetCurrentContext()
+{
+	return Scheduler::GetCurrentContext();
+}
+
+void SchedulerSaveUserStack(void* userStack)
+{
+	return Scheduler::SaveUserStack(userStack);
+}
+
+void* SchedulerGetUserStack()
+{
+	return Scheduler::GetUserStack();
+}
+
+void* Scheduler::GetCurrentContext()
+{
+	CpuContext* context = (CpuContext*)__readgsqword(offsetof(CpuContext, SelfPointer));
+	return context->Thread->m_context;
+}
+
+void Scheduler::SaveUserStack(void* userStack)
+{
+	CpuContext* context = (CpuContext*)__readgsqword(offsetof(CpuContext, SelfPointer));
+	UserThread* userThread = context->Thread->m_userThread;
+	userThread->SavedStack = userStack;
+}
+
+void* Scheduler::GetUserStack()
+{
+	CpuContext* context = (CpuContext*)__readgsqword(offsetof(CpuContext, SelfPointer));
+	UserThread* userThread = context->Thread->m_userThread;
+	return userThread->SavedStack;
+}
 
 Scheduler::Scheduler(KThread& bootThread) :
 	Enabled(),
@@ -126,6 +163,7 @@ void Scheduler::Schedule()
 			if (user->HasMessage())
 			{
 				//Move to ready queue
+				kernel.Printf("Moving %d to ready, messages: %d\n", item->GetId(), user->m_messages.size());
 				item->m_state = ThreadState::Ready;
 				m_readyQueue.push_back(item);
 				it = m_messageWaits.erase(it);
@@ -174,9 +212,13 @@ void Scheduler::Schedule()
 				ArchSetPagingRoot(cr3);
 			}
 
+			kernel.Printf("Next thread\n");
+			next->Display();
+
 			//Switch to thread
 			next->m_state = ThreadState::Running;
 			SetCurrentThread(*next);
+			//TODO: this isnt the current stack pointer of the context struct
 			ArchSetInterruptStack(next->GetStackPointer());
 			ArchLoadContext(next->m_context);
 		}

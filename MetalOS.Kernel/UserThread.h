@@ -5,6 +5,8 @@
 class Scheduler;
 class UserThread
 {
+	friend class Scheduler;
+
 public:
 	static uint32_t LastId;
 
@@ -22,15 +24,22 @@ public:
 		return !m_messages.empty();
 	}
 
+	const uint32_t GetId() const
+	{
+		return m_id;
+	}
+
 	Message* DequeueMessage();
 	void EnqueueMessage(Message* message);
 
-	//Thread can have one window for now
-	UserWindow* Window;
 
 	void Display();
 	void DisplayMessages();
 	void DisplayDetails();
+
+	void* SavedStack;
+	//void* SavedUserRBP;
+
 
 private:
 	uint32_t m_id;

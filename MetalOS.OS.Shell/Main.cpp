@@ -31,7 +31,7 @@ int main(int argc, char** argv)
 	GetProcessInfo(info);
 	DebugPrintf("ProcessID: 0x%x\n", info.Id);
 
-	Handle h = CreateWindow("Shell");
+	Handle h = Create("Shell");
 
 	Rectangle rect = { 0 };
 	GetWindowRect(h, rect);

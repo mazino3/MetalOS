@@ -17,6 +17,7 @@ UserProcess::UserProcess(const std::string& name) :
 	m_heap(),
 	m_peb(),
 	m_threads(),
+	m_ringBuffers(),
 	InitProcess(),
 	InitThread(),
 	Delete()

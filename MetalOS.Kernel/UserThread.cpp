@@ -7,7 +7,6 @@
 uint32_t UserThread::LastId = 0;
 
 UserThread::UserThread(ThreadStart startAddress, void* arg, void* entry, size_t stackSize, UserProcess& process) :
-	Window(),
 	m_id(++LastId),
 	m_process(process),
 	m_teb(),
@@ -31,6 +30,7 @@ UserThread::UserThread(ThreadStart startAddress, void* arg, void* entry, size_t 
 	m_teb->ThreadStart = startAddress;
 	m_teb->Arg = arg;
 	m_teb->ThreadId = this->m_id;
+	m_teb->Handle = this;
 }
 
 void UserThread::Run()
@@ -60,6 +60,9 @@ void UserThread::Display()
 	kernel.Printf("     Id: %d\n", m_id);
 	kernel.Printf("  m_teb: 0x%016x\n", m_teb);
 	kernel.Printf("    ctx: 0x%016x\n", m_context);
+
+	x64_context* ctx = (x64_context*)m_context;
+	kernel.Printf("  Rsp: 0x%016x Rip: 0x%016x RFlags:0x%08x\n", ctx->Rsp, ctx->Rip, (uint32_t)ctx->Rflags);
 }
 
 void UserThread::DisplayMessages()
@@ -81,8 +84,6 @@ void UserThread::DisplayDetails()
 	kernel.Printf("     ID: 0x%016x\n", m_teb->ThreadId);
 	kernel.Printf("    PEB: 0x%016x\n", m_teb->PEB);
 	kernel.Printf("  Start: 0x%016x\n", m_teb->ThreadStart);
+	kernel.Printf(" Handle: 0x%016x\n", m_teb->Handle);
 	kernel.Printf("    Arg: 0x%016x\n", m_teb->Arg);
-
-	x64_context* ctx = (x64_context*)m_context;
-	kernel.Printf("  Rsp: 0x%016x Rip: 0x%016x RFlags:0x%08x\n", ctx->Rsp, ctx->Rip, (uint32_t)ctx->Rflags);
 }

@@ -73,6 +73,12 @@ ArchLoadContext proc
 	jmp r9
 ArchLoadContext endp
 
+; void* ArchContextGetStack(void* context);
+ArchContextGetStack proc
+	mov rax, [rcx + CONTEXT._rsp]
+	ret
+ArchContextGetStack endp
+
 ; void ArchUserThreadStart(void* context, void* teb);
 ArchUserThreadStart proc
 	; Load registers

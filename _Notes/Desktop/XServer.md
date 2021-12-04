@@ -64,3 +64,4 @@ crw-rw----  1 root input 13, 32 Nov 17 18:52 mouse0
 Open(), then poll/select to be notified file descriptor has data, then read.
 
 How does framebuffer work?
+/dev/fb0?

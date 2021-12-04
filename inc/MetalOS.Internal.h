@@ -99,9 +99,12 @@ enum class SystemCall : size_t
 {
 	GetSystemInfo = 0x100,
 	GetTickCount,
+	GetSystemTime,
 
 	GetCurrentThread = 0x200,
+	CreateProcess,
 	CreateThread,
+	GetThreadId,
 	Sleep,
 	SwitchToThread,
 	SuspendThread,
@@ -109,11 +112,12 @@ enum class SystemCall : size_t
 	ExitProcess,
 	ExitThread,
 
-	CreateWindow = 0x300,
-	GetWindowRect,
+	CreateDesktop = 0x300,
+	GetDesktop,
+	SetScreenBuffer,
+	CreateMessageQueue,
 	GetMessage,
 	PeekMessage,
-	SetScreenBuffer,
 
 	CreateFile = 0x400,
 	ReadFile,
@@ -125,6 +129,10 @@ enum class SystemCall : size_t
 	CreateDirectory,
 
 	VirtualAlloc = 0x500,
+	CreateRingBuffer,
+	CreateSharedMemory,
+	MapObject,
+	MapSharedObject,
 
 	DebugPrint = 0x600,
 };

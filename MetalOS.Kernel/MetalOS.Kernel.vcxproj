@@ -159,7 +159,6 @@
     <ClCompile Include="StackWalk.cpp" />
     <ClCompile Include="StringPrinter.cpp" />
     <ClCompile Include="UserThread.cpp" />
-    <ClCompile Include="UserWindow.cpp" />
     <ClCompile Include="VirtualAddressSpace.cpp" />
     <ClCompile Include="Bitvector.cpp" />
     <ClCompile Include="Display.cpp" />
@@ -188,7 +187,7 @@
     <ClInclude Include="KernelHeap.h" />
     <ClInclude Include="KObject.h" />
     <ClInclude Include="PortableExecutable.h" />
-    <ClInclude Include="RingBuffer.h" />
+    <ClInclude Include="KRingBuffer.h" />
     <ClInclude Include="UserProcess.h" />
     <ClInclude Include="KSemaphore.h" />
     <ClInclude Include="KSpinLock.h" />
@@ -210,8 +209,8 @@
     <ClInclude Include="SoftwareDevice.h" />
     <ClInclude Include="StackWalk.h" />
     <ClInclude Include="StringPrinter.h" />
+    <ClInclude Include="UserRingBuffer.h" />
     <ClInclude Include="UserThread.h" />
-    <ClInclude Include="UserWindow.h" />
     <ClInclude Include="VirtualAddressSpace.h" />
     <ClInclude Include="Bitvector.h" />
     <ClInclude Include="Display.h" />

@@ -100,6 +100,9 @@ enum class GenericAccess
 };
 
 typedef void* Handle;
+typedef void* HThread;
+typedef void* HSharedMemory;
+typedef void* HRingBuffer;
 typedef uint32_t (*ThreadStart)(void* parameter);
 
 typedef uint16_t VirtualKey;
@@ -444,15 +447,15 @@ struct KeyEvent
 	} Flags;
 };
 
+
 enum class MessageType
 {
-	KeyEvent
+	KeyEvent,
 };
 
 struct MessageHeader
 {
 	MessageType MessageType;
-	Handle Window;
 };
 
 struct Message
@@ -502,19 +505,20 @@ enum class MemoryProtection
 	PageReadWriteExecute = PageRead | PageWrite | PageExecute
 };
 
-#define MAX_LOADED_MODULES 8
 
+constexpr size_t MaxModuleName = 16;
 struct Module
 {
-	char Name[16];
 	void* Address;
+	char Name[MaxModuleName];
 };
 
+constexpr size_t MaxLoadedModules = 8;
 struct ProcessEnvironmentBlock
 {
 	uint32_t ProcessId;
 	uintptr_t BaseAddress;
-	Module LoadedModules[MAX_LOADED_MODULES];
+	Module LoadedModules[MaxLoadedModules];
 	size_t ModuleIndex;
 };
 
@@ -523,6 +527,7 @@ struct ThreadEnvironmentBlock
 	ThreadEnvironmentBlock* SelfPointer;
 	ProcessEnvironmentBlock* PEB;
 	ThreadStart ThreadStart;
+	Handle Handle;
 	void* Arg;
 	uint32_t ThreadId;
 	uint32_t Error;
@@ -538,18 +543,24 @@ enum class FilePointerMove
 enum class SystemCallResult
 {
 	Success = 0,
+	InvalidPointer,
 	Failed
 };
 
 //Info
 SYSTEMCALL(SystemCallResult) GetSystemInfo(SystemInfo& info);
-RUNTIMECALL(SystemCallResult) GetProcessInfo(ProcessInfo& info);
 SYSTEMCALL(size_t) GetTickCount();
+SYSTEMCALL(SystemCallResult) GetSystemTime(SystemTime& time);
+
+RUNTIMECALL(SystemCallResult) GetProcessInfo(ProcessInfo& info);
+
 
 //Process/Thread
-SYSTEMCALL(Handle) GetCurrentThread();
+SYSTEMCALL(SystemCallResult) CreateProcess(const char* processName);
+SYSTEMCALL(uint32_t) GetThreadId(Handle thread);
+SYSTEMCALL(HThread) GetCurrentThread();
 RUNTIMECALL(uint64_t) GetCurrentThreadId();
-SYSTEMCALL(Handle) CreateThread(size_t stackSize, ThreadStart startAddress, void* arg);
+SYSTEMCALL(HThread) CreateThread(size_t stackSize, ThreadStart startAddress, void* arg);
 SYSTEMCALL(void) Sleep(const uint32_t milliseconds);
 SYSTEMCALL(void) SwitchToThread();
 SYSTEMCALL(SystemCallResult) SuspendThread(Handle thread, size_t& prevCount);
@@ -565,11 +576,12 @@ RUNTIMECALL(void) SetLastError(uint32_t errorCode);
 //SYSTEMCALL ReleaseSemaphore(Handle hSemaphore, size_t releaseCount, size_t* previousCount);
 
 //Windows
-SYSTEMCALL(Handle) CreateWindow(const char* name);
-SYSTEMCALL(SystemCallResult) GetWindowRect(const Handle handle, Rectangle& rect);
+SYSTEMCALL(SystemCallResult) CreateDesktop(Handle& handle, Point2D& bounds);
+SYSTEMCALL(HThread) GetDesktop();
+SYSTEMCALL(SystemCallResult) SetScreenBuffer(const void* buffer);
+SYSTEMCALL(SystemCallResult) CreateMessageQueue();
 SYSTEMCALL(SystemCallResult) GetMessage(Message& message);
 SYSTEMCALL(SystemCallResult) PeekMessage(Message& message);
-SYSTEMCALL(SystemCallResult) SetScreenBuffer(const void* buffer);
 
 SYSTEMCALL(Handle) CreateFile(const char* path, const GenericAccess access);
 SYSTEMCALL(SystemCallResult) ReadFile(const Handle handle, void* buffer, const size_t bufferSize, size_t* bytesRead);
@@ -581,6 +593,10 @@ SYSTEMCALL(SystemCallResult) DeleteFile(const char* fileName);
 SYSTEMCALL(SystemCallResult) CreateDirectory(const char* path);
 
 SYSTEMCALL(void*) VirtualAlloc(const void* address, const size_t size, const MemoryAllocationType allocationType, const MemoryProtection protect);
+SYSTEMCALL(HRingBuffer) CreateRingBuffer(const char* name, const size_t indexSize, const size_t ringSize);
+SYSTEMCALL(HSharedMemory) CreateSharedMemory(const char* name, const size_t size);
+SYSTEMCALL(void*) MapObject(const void* address, Handle handle);
+SYSTEMCALL(void*) MapSharedObject(const void* address, const char* name);
 
 SYSTEMCALL(SystemCallResult) DebugPrint(const char* s);
 
@@ -592,8 +608,7 @@ class Thread
 public:
 	static Thread* GetCurrent()
 	{
-		Thread* ret = new Thread();
-		ret->m_thread = GetCurrentThread();
+		Thread* ret = new Thread(GetCurrentThread());
 		return ret;
 	}
 
@@ -612,8 +627,18 @@ public:
 		return m_thread != nullptr;
 	}
 
+	const uint32_t GetId() const
+	{
+		return GetThreadId(m_thread);
+	}
+
 private:
-	Thread();
+	Thread(Handle thread) :
+		m_thread(thread)
+	{
+
+	}
+
 	Handle m_thread;
 };
 
@@ -631,3 +656,29 @@ enum class DllEntryReason
 //False - DLL is unloaded
 typedef uint32_t (*DllMainCall)(Handle hinstDLL, enum DllEntryReason fdwReason);
 const char DllMainName[] = "DllMain";
+
+struct RingBufferHeader
+{
+	size_t Capacity;
+	size_t ReadIndex;
+	size_t WriteIndex;
+	Handle ReadWriteLock;
+};
+
+#define PAGE_SHIFT  12
+#define PAGE_SIZE (1 << PAGE_SHIFT)
+constexpr size_t UIChannelSize = 2 * PAGE_SIZE;
+
+struct Channel
+{
+	struct
+	{
+		RingBufferHeader* Header;
+		char* Buffer;
+	} Inbound;
+	struct
+	{
+		RingBufferHeader* Header;
+		char* Buffer;
+	} Outbound;
+};

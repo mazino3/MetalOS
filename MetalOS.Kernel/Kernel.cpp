@@ -29,7 +29,7 @@
 #include <Path.h>
 
 Kernel::Kernel() :
-	Window(),
+	WindowThread(),
 	m_physicalAddress(),
 	m_imageSize(),
 	m_runtime(),
@@ -61,6 +61,7 @@ Kernel::Kernel() :
 
 	m_processes(),
 	m_scheduler(),
+	m_objectsRingBuffers(),
 
 	m_modules(),
 
@@ -161,7 +162,7 @@ void Kernel::Initialize(const PLOADER_PARAMS params)
 	m_heapInitialized = true;
 
 	//PDB
-	m_pdb = new Pdb(KernelKernelPdb);
+	//m_pdb = new Pdb(KernelKernelPdb);
 
 	//Interrupts
 	m_interruptHandlers = new std::map<InterruptVector, InterruptContext>();
@@ -178,6 +179,7 @@ void Kernel::Initialize(const PLOADER_PARAMS params)
 	//Process and thread containers
 	m_processes = new std::map<uint32_t, UserProcess*>();
 	m_scheduler = new Scheduler(*bootThread);
+	m_objectsRingBuffers = new std::map<std::string, UserRingBuffer*>();
 
 	//Modules
 	m_modules = new std::list<KeLibrary>();
@@ -185,7 +187,8 @@ void Kernel::Initialize(const PLOADER_PARAMS params)
 	m_modules->push_back(keLibrary);
 
 	//Create idle thread
-	CreateKernelThread(&Kernel::IdleThread, this);
+	KThread* idle = CreateKernelThread(&Kernel::IdleThread, this);
+	idle->SetName("idle");
 
 	//Initialize Platform
 	m_hyperV = new HyperV();
@@ -269,6 +272,7 @@ void Kernel::HandleInterrupt(InterruptVector vector, PINTERRUPT_FRAME pFrame)
 
 	this->Printf("ISR: 0x%x, Code: %x, RBP: 0x%16x, RIP: 0x%16x, RSP: 0x%16x\n", vector, pFrame->ErrorCode, pFrame->RBP, pFrame->RIP, pFrame->RSP);
 	this->Printf("  RAX: 0x%16x, RBX: 0x%16x, RCX: 0x%16x, RDX: 0x%16x\n", pFrame->RAX, pFrame->RBX, pFrame->RCX, pFrame->RDX);
+	this->Printf("  CS: 0x%x, SS: 0x%x\n", pFrame->CS, pFrame->SS);
 
 	switch (vector)
 	{
@@ -481,14 +485,14 @@ void Kernel::OnTimer0()
 		m_scheduler->Schedule();
 }
 
-KThread* Kernel::CreateKernelThread(const ThreadStart start, void* arg)
+KThread* Kernel::CreateKernelThread(const ThreadStart start, void* arg, UserThread* userThread)
 {
 	//Current thread
 	const KThread* current = m_scheduler->GetCurrentThread();
 	Print("CreateThread - Id: 0x%x\n", current->GetId());
 	
 	//Add kernel thread
-	KThread* thread = new KThread(start, arg);
+	KThread* thread = new KThread(start, arg, userThread);
 	thread->InitContext(&Kernel::KernelThreadInitThunk);
 	m_scheduler->AddReady(*thread);
 	return thread;
@@ -558,7 +562,7 @@ void Kernel::KernelThreadInitThunk()
 	Assert(false);
 }
 
-void Kernel::UserThreadInitThunk()
+uint32_t Kernel::UserThreadInitThunk(void* unused)
 {
 	kernel.Printf("Kernel::UserThreadInitThunk\n");
 	KThread* current = kernel.m_scheduler->GetCurrentThread();
@@ -569,7 +573,6 @@ void Kernel::UserThreadInitThunk()
 
 	user->GetProcess().Display();
 	user->GetProcess().DisplayDetails();
-	ArchSetInterruptStack(current->GetStackPointer());
 	user->Run();
 
 	Assert(false);
@@ -701,6 +704,11 @@ void* Kernel::VirtualMap(const void* address, const std::vector<paddr_t>& addres
 	return m_virtualMemory->VirtualMap((uintptr_t)address, addresses, protection, *m_runtimeSpace);
 }
 
+void* Kernel::VirtualMap(UserProcess& process, const void* address, const std::vector<paddr_t>& addresses, const MemoryProtection& protection)
+{
+	return m_virtualMemory->VirtualMap((uintptr_t)address, addresses, protection, process.GetAddressSpace());
+}
+
 Device* Kernel::GetDevice(const std::string path) const
 {
 	return m_deviceTree.GetDevice(path);
@@ -768,13 +776,14 @@ bool Kernel::CreateProcess(const std::string& path)
 	Assert(ReadFile(*file, &dosHeader, sizeof(IMAGE_DOS_HEADER), &read));
 	Assert(read == sizeof(IMAGE_DOS_HEADER));
 	Assert(dosHeader.e_magic == IMAGE_DOS_SIGNATURE);
+	Print("1\n");
 
 	//NT Header
 	IMAGE_NT_HEADERS64 peHeader;
 	Assert(SetFilePosition(*file, dosHeader.e_lfanew));
 	Assert(ReadFile(*file, &peHeader, sizeof(IMAGE_NT_HEADERS64), &read));
 	Assert(read == sizeof(IMAGE_NT_HEADERS64));
-
+	Print("2\n");
 	//Verify image
 	if (peHeader.Signature != IMAGE_NT_SIGNATURE ||
 		peHeader.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64 ||
@@ -785,7 +794,7 @@ bool Kernel::CreateProcess(const std::string& path)
 	
 	//Create new process to create new address space
 	UserProcess* process = new UserProcess(path);
-
+	Print("3\n");
 	//Swap to new process address space to load file
 	//TODO: page into kernel, load, then remove and page into process so we dont switch address space
 	ArchSetPagingRoot(process->GetCR3());
@@ -832,11 +841,12 @@ bool Kernel::CreateProcess(const std::string& path)
 	process->InitThread = (void*)PortableExecutable::GetProcAddress(api, "InitThread");
 	Print("Proc: 0x%016x Thread: 0x%016x\n", process->InitProcess, process->InitThread);
 
-	//Patch imports of process for just mosapi
+	//Patch imports of process for just mosrt
 	Loader::KernelExports(address, api);
-
+	Print("4\n");
 	//Create thread TODO: reserve vs commit stack size
 	CreateThread(*process, pNtHeader->OptionalHeader.SizeOfStackReserve, nullptr, nullptr, process->InitProcess);
+	Print("5\n");
 	return true;
 }
 
@@ -848,27 +858,31 @@ KThread* Kernel::CreateThread(UserProcess& process, size_t stackSize, ThreadStar
 	UserThread* userThread = new UserThread(startAddress, arg, entry, stackSize, process);
 
 	//Create kernel thread
-	KThread* thread = new KThread(nullptr, nullptr, userThread);
-	thread->InitContext(&Kernel::UserThreadInitThunk);
+	KThread* thread = CreateKernelThread(&Kernel::UserThreadInitThunk, nullptr, userThread);
+	
+	char name[32] = {};
+	sprintf(name, "%s[%d]", process.GetName().c_str(), userThread->GetId());
+	
+	thread->SetName(name);
 	process.AddThread(*thread);
 	m_scheduler->AddReady(*thread);
 	
 	return thread;
 }
 
-void* Kernel::VirtualAlloc(UserProcess& process, void* address, size_t size, MemoryAllocationType allocationType, MemoryProtection protect)
+void* Kernel::VirtualAlloc(UserProcess& process, const void* address, const size_t size, const MemoryAllocationType allocationType, const MemoryProtection protection)
 {
-	void* allocated = m_virtualMemory->Allocate((uintptr_t)address, SIZE_TO_PAGES(size), protect, process.GetAddressSpace());
+	void* allocated = m_virtualMemory->Allocate((uintptr_t)address, SIZE_TO_PAGES(size), protection, process.GetAddressSpace());
 	Assert(allocated);
 	return allocated;
 }
 
 void Kernel::PostMessage(Message* msg)
 {
-	if (!Window)
+	if (!WindowThread)
 		return;
 
-	Window->PostMessage(msg);
+	WindowThread->EnqueueMessage(msg);
 }
 
 bool Kernel::IsValidUserPointer(const void* p)

@@ -4,10 +4,10 @@
 #include <array>
 
 template<class T, size_t N>
-class RingBuffer
+class KRingBuffer
 {
 public:
-	RingBuffer() : m_head(), m_tail(N - 1), m_count(), m_buffer()
+	KRingBuffer() : m_head(), m_tail(N - 1), m_count(), m_buffer()
 	{
 
 	}
